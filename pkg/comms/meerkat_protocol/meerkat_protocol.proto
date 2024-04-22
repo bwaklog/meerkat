@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package meerkat_protocol;
+
+option go_package = ".";
+
+// Interface exported by server
+service MeerkatGuide {
+    rpc SayHello(HelloRequest) returns (HelloResponse) {}
+}
+
+message HelloRequest {
+    string name = 1;
+}
+
+message HelloResponse {
+    string message = 1;
+}
