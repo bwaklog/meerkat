@@ -19,7 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	MeerkatGuide_SayHello_FullMethodName = "/meerkat_protocol.MeerkatGuide/SayHello"
+	MeerkatGuide_SayHello_FullMethodName               = "/meerkat_protocol.MeerkatGuide/SayHello"
+	MeerkatGuide_EchoText_FullMethodName               = "/meerkat_protocol.MeerkatGuide/EchoText"
+	MeerkatGuide_JoinPoolProtocol_FullMethodName       = "/meerkat_protocol.MeerkatGuide/JoinPoolProtocol"
+	MeerkatGuide_HandshakePoolProtocol_FullMethodName  = "/meerkat_protocol.MeerkatGuide/HandshakePoolProtocol"
+	MeerkatGuide_DisconnectPoolProtocol_FullMethodName = "/meerkat_protocol.MeerkatGuide/DisconnectPoolProtocol"
 )
 
 // MeerkatGuideClient is the client API for MeerkatGuide service.
@@ -27,6 +31,10 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MeerkatGuideClient interface {
 	SayHello(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (*HelloResponse, error)
+	EchoText(ctx context.Context, in *EchoRequest, opts ...grpc.CallOption) (*EchoResponse, error)
+	JoinPoolProtocol(ctx context.Context, in *PoolJoinRequest, opts ...grpc.CallOption) (*PoolJoinResponse, error)
+	HandshakePoolProtocol(ctx context.Context, in *PoolHandshakesRequest, opts ...grpc.CallOption) (*PoolHandshakeResponse, error)
+	DisconnectPoolProtocol(ctx context.Context, in *PoolDisconnectRequest, opts ...grpc.CallOption) (*PoolDisconnectResponse, error)
 }
 
 type meerkatGuideClient struct {
@@ -46,11 +54,51 @@ func (c *meerkatGuideClient) SayHello(ctx context.Context, in *HelloRequest, opt
 	return out, nil
 }
 
+func (c *meerkatGuideClient) EchoText(ctx context.Context, in *EchoRequest, opts ...grpc.CallOption) (*EchoResponse, error) {
+	out := new(EchoResponse)
+	err := c.cc.Invoke(ctx, MeerkatGuide_EchoText_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *meerkatGuideClient) JoinPoolProtocol(ctx context.Context, in *PoolJoinRequest, opts ...grpc.CallOption) (*PoolJoinResponse, error) {
+	out := new(PoolJoinResponse)
+	err := c.cc.Invoke(ctx, MeerkatGuide_JoinPoolProtocol_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *meerkatGuideClient) HandshakePoolProtocol(ctx context.Context, in *PoolHandshakesRequest, opts ...grpc.CallOption) (*PoolHandshakeResponse, error) {
+	out := new(PoolHandshakeResponse)
+	err := c.cc.Invoke(ctx, MeerkatGuide_HandshakePoolProtocol_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *meerkatGuideClient) DisconnectPoolProtocol(ctx context.Context, in *PoolDisconnectRequest, opts ...grpc.CallOption) (*PoolDisconnectResponse, error) {
+	out := new(PoolDisconnectResponse)
+	err := c.cc.Invoke(ctx, MeerkatGuide_DisconnectPoolProtocol_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MeerkatGuideServer is the server API for MeerkatGuide service.
 // All implementations must embed UnimplementedMeerkatGuideServer
 // for forward compatibility
 type MeerkatGuideServer interface {
 	SayHello(context.Context, *HelloRequest) (*HelloResponse, error)
+	EchoText(context.Context, *EchoRequest) (*EchoResponse, error)
+	JoinPoolProtocol(context.Context, *PoolJoinRequest) (*PoolJoinResponse, error)
+	HandshakePoolProtocol(context.Context, *PoolHandshakesRequest) (*PoolHandshakeResponse, error)
+	DisconnectPoolProtocol(context.Context, *PoolDisconnectRequest) (*PoolDisconnectResponse, error)
 	mustEmbedUnimplementedMeerkatGuideServer()
 }
 
@@ -60,6 +108,18 @@ type UnimplementedMeerkatGuideServer struct {
 
 func (UnimplementedMeerkatGuideServer) SayHello(context.Context, *HelloRequest) (*HelloResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SayHello not implemented")
+}
+func (UnimplementedMeerkatGuideServer) EchoText(context.Context, *EchoRequest) (*EchoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EchoText not implemented")
+}
+func (UnimplementedMeerkatGuideServer) JoinPoolProtocol(context.Context, *PoolJoinRequest) (*PoolJoinResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method JoinPoolProtocol not implemented")
+}
+func (UnimplementedMeerkatGuideServer) HandshakePoolProtocol(context.Context, *PoolHandshakesRequest) (*PoolHandshakeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method HandshakePoolProtocol not implemented")
+}
+func (UnimplementedMeerkatGuideServer) DisconnectPoolProtocol(context.Context, *PoolDisconnectRequest) (*PoolDisconnectResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DisconnectPoolProtocol not implemented")
 }
 func (UnimplementedMeerkatGuideServer) mustEmbedUnimplementedMeerkatGuideServer() {}
 
@@ -92,6 +152,78 @@ func _MeerkatGuide_SayHello_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MeerkatGuide_EchoText_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EchoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MeerkatGuideServer).EchoText(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MeerkatGuide_EchoText_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeerkatGuideServer).EchoText(ctx, req.(*EchoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MeerkatGuide_JoinPoolProtocol_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PoolJoinRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MeerkatGuideServer).JoinPoolProtocol(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MeerkatGuide_JoinPoolProtocol_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeerkatGuideServer).JoinPoolProtocol(ctx, req.(*PoolJoinRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MeerkatGuide_HandshakePoolProtocol_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PoolHandshakesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MeerkatGuideServer).HandshakePoolProtocol(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MeerkatGuide_HandshakePoolProtocol_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeerkatGuideServer).HandshakePoolProtocol(ctx, req.(*PoolHandshakesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MeerkatGuide_DisconnectPoolProtocol_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PoolDisconnectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MeerkatGuideServer).DisconnectPoolProtocol(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MeerkatGuide_DisconnectPoolProtocol_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeerkatGuideServer).DisconnectPoolProtocol(ctx, req.(*PoolDisconnectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MeerkatGuide_ServiceDesc is the grpc.ServiceDesc for MeerkatGuide service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -102,6 +234,22 @@ var MeerkatGuide_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SayHello",
 			Handler:    _MeerkatGuide_SayHello_Handler,
+		},
+		{
+			MethodName: "EchoText",
+			Handler:    _MeerkatGuide_EchoText_Handler,
+		},
+		{
+			MethodName: "JoinPoolProtocol",
+			Handler:    _MeerkatGuide_JoinPoolProtocol_Handler,
+		},
+		{
+			MethodName: "HandshakePoolProtocol",
+			Handler:    _MeerkatGuide_HandshakePoolProtocol_Handler,
+		},
+		{
+			MethodName: "DisconnectPoolProtocol",
+			Handler:    _MeerkatGuide_DisconnectPoolProtocol_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

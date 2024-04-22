@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	comms "meerkat/pkg/comms/meerkat"
+	"strconv"
+	"time"
 
 	// "meerkat/pkg/comms"
 
@@ -16,14 +19,26 @@ func main() {
 
 	// var wg sync.WaitGroup
 
+	node := comms.MeerkatNode{
+		Clients: []string{},
+		Data:    "",
+	}
+
 	rootCmd := &cobra.Command{
 		Use:   "meerkat",
 		Short: "connection client",
 		Run: func(cmd *cobra.Command, args []string) {
 
+			// var conn *grpc.ClientConn
 
 			if paddr != "" {
-				go comms.StartListener(paddr)
+
+				node.Address = "localhost"
+				node.Port, _ = strconv.Atoi(paddr)
+
+				// this actively listens in a separate go routine
+				// for any incoming connections
+				go comms.StartListener(paddr, &node)
 
 				if !server {
 					// this is for connecting to a node who
@@ -31,15 +46,38 @@ func main() {
 					if saddr == "" {
 						log.Fatalln("Didnt provide a server node to connect to")
 					} else {
-						comms.ConnectToServer(saddr)
+						// conn = comms.ConnectToServer(saddr)
+						// this is where we joing the network pool
+						comms.JoinNetworkPool(&node, saddr)
+						// function adds the client to its client list
 					}
 				}
+
 			} else {
 				log.Fatalln("Didnt provide a port to open connection")
 			}
 
-			for {}
+			go func() {
+				log.Printf("Evaluating %d clients", len(node.Clients))
+				for _, conn := range node.Clients {
+					log.Println("🖥️ CLIENT: ", conn)
+				}
+				time.Sleep(5 * time.Second)
+			}()
 
+			for {
+				var input string
+				fmt.Print("MSG: ")
+				fmt.Scanln(&input)
+
+				if input == "exit" {
+					if comms.HandleDisconnect(&node) {
+						break
+					} else {
+						log.Println("Failed to disconnect")
+					}
+				}
+			}
 
 		},
 	}

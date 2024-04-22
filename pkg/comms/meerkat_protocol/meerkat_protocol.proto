@@ -7,6 +7,64 @@ option go_package = ".";
 // Interface exported by server
 service MeerkatGuide {
     rpc SayHello(HelloRequest) returns (HelloResponse) {}
+
+    rpc EchoText(EchoRequest) returns (EchoResponse) {}
+
+    rpc JoinPoolProtocol(PoolJoinRequest) returns (PoolJoinResponse) {}
+
+    rpc HandshakePoolProtocol(PoolHandshakesRequest) returns (PoolHandshakeResponse) {}
+
+    rpc DisconnectPoolProtocol(PoolDisconnectRequest) returns (PoolDisconnectResponse) {}
+}
+
+message PoolJoinRequest {
+    // Node enterieng sneds a request to join
+    // with its address port and and empty
+    // list of nodes it knows
+    string address = 1;
+    int32 port = 2;
+    repeated string client_list = 3;
+}
+
+message PoolJoinResponse {
+    // The recieving node responds with a list
+    // of nodes known to it and synced up data
+    // "string" associated with it
+    repeated string client_list = 1;
+    string data = 2;
+}
+
+message PoolHandshakesRequest {
+    // The recieving node responds with a list
+    // of nodes known to it and synced up data
+    // "string" associated with it
+    repeated string client_list = 1;
+}
+
+message PoolHandshakeResponse {
+    // response back to the node that it has
+    // updated its client list with the new node
+    bool success = 1;
+}
+
+message PoolDisconnectRequest {
+    // Node leaving sends a request to leave
+    // with its address and port
+    string address = 1;
+    int32 port = 2;
+}
+
+message PoolDisconnectResponse {
+    // empty response
+    bool success = 1;
+}
+
+message EchoRequest {
+    string message = 1;
+}
+
+message EchoResponse {
+    string message = 1;
 }
 
 message HelloRequest {
