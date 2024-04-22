@@ -50,6 +50,22 @@ func (s *MeerkatServer) JoinPoolProtocol(ctx context.Context, request *pb.PoolJo
 	return &pb.PoolJoinResponse{ClientList: NodeClientList, Data: s.Node.Data}, nil
 }
 
+func (s *MeerkatServer) HandshakePoolProtocol(ctx context.Context, request *pb.PoolHandshakesRequest) (*pb.PoolHandshakeResponse, error) {
+	// this is when a node already connected to some other node in the
+	// network pool is initiating a connection between nodes part
+	// of the client list
+	address := fmt.Sprintf("%s:%d", request.GetAddress(), request.GetPort())
+
+	log.Printf("Handshake with node %s", address)
+
+	// adds node to the list of clients
+	s.Node.Clients = append(s.Node.Clients, address)
+	conn := DialNewNode(address)
+	s.Node.ClientsConn = append(s.Node.ClientsConn, conn)
+
+	return &pb.PoolHandshakeResponse{Success: true}, nil
+}
+
 // func (s *MeerkatServer) DisconnectPoolProtocol(ctx context.Context, request )
 func (s *MeerkatServer) DisconnectPoolProtocol(ctx context.Context, request *pb.PoolDisconnectRequest) (*pb.PoolDisconnectResponse, error) {
 	address := fmt.Sprintf("%s:%d", request.GetAddress(), request.GetPort())

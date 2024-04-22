@@ -40,6 +40,7 @@ func main() {
 				// for any incoming connections
 				go comms.StartListener(paddr, &node)
 
+
 				if !server {
 					// this is for connecting to a node who
 					// is in the network pool
@@ -57,19 +58,21 @@ func main() {
 				log.Fatalln("Didnt provide a port to open connection")
 			}
 
+			// run the evaluation throuhg in the background
 			go func() {
-				log.Printf("Evaluating %d clients", len(node.Clients))
-				for _, conn := range node.Clients {
-					log.Println("🖥️ CLIENT: ", conn)
+				for {
+					log.Printf("Evaluating %d clients", len(node.Clients))
+					for _, conn := range node.Clients {
+						log.Println("🖥️ CLIENT: ", conn)
+					}
+					time.Sleep(5 * time.Second)
 				}
-				time.Sleep(5 * time.Second)
 			}()
 
 			for {
 				var input string
 				fmt.Print("MSG: ")
 				fmt.Scanln(&input)
-
 				if input == "exit" {
 					if comms.HandleDisconnect(&node) {
 						break
@@ -77,6 +80,7 @@ func main() {
 						log.Println("Failed to disconnect")
 					}
 				}
+
 			}
 
 		},

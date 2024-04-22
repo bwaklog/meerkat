@@ -54,19 +54,38 @@ func JoinNetworkPool(node *MeerkatNode, addr string) {
 	node.Clients = r.GetClientList()
 	node.Data = r.GetData()
 
+	if len(node.Clients) > 0 {
+		HandshakeClients(node)
+	}
+
 	node.ClientsConn = append(node.ClientsConn, conn)
 	node.Clients = append(node.Clients, address)
+}
 
-	// with the addresses of the clinets, we dial each one and open
-	// a connection to them
+func HandshakeClients(node *MeerkatNode) {
+	for _, conn := range node.ClientsConn {
+		c := pb.NewMeerkatGuideClient(conn)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
 
-	// for _, connAddr := range node.Clients {
-	// 	fmt.Println("CLIENT: ", connAddr)
-	// }
+		handshakeRequest := &pb.PoolHandshakesRequest{
+			Address:    node.Address,
+			Port:       int32(node.Port),
+			ClientList: node.Clients,
+		}
 
-	for _, client := range node.Clients {
-		connClient := ConnectToServer(client)
-		node.ClientsConn = append(node.ClientsConn, connClient)
+		r, err := c.HandshakePoolProtocol(ctx, handshakeRequest)
+		if err != nil {
+			log.Fatalf("Couldn't send a handshake with client %s", conn.Target())
+		}
+
+		if r.GetSuccess() {
+			log.Printf("Handshake with client %s successful", conn.Target())
+			node.Clients = append(node.Clients, conn.Target())
+			node.ClientsConn = append(node.ClientsConn, conn)
+		} else {
+			log.Printf("Handshake with client %s failed", conn.Target())
+		}
 	}
 }
 

@@ -38,7 +38,9 @@ message PoolHandshakesRequest {
     // The recieving node responds with a list
     // of nodes known to it and synced up data
     // "string" associated with it
-    repeated string client_list = 1;
+    string address = 1;
+    int32 port = 2;
+    repeated string client_list = 3;
 }
 
 message PoolHandshakeResponse {
