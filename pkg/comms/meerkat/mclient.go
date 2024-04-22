@@ -54,16 +54,20 @@ func JoinNetworkPool(node *MeerkatNode, addr string) {
 	node.Clients = r.GetClientList()
 	node.Data = r.GetData()
 
-	if len(node.Clients) > 0 {
-		HandshakeClients(node)
-	}
+	HandshakeClients(node)
 
 	node.ClientsConn = append(node.ClientsConn, conn)
 	node.Clients = append(node.Clients, address)
 }
 
 func HandshakeClients(node *MeerkatNode) {
-	for _, conn := range node.ClientsConn {
+	for _, connAddr := range node.Clients {
+
+		conn, err := grpc.Dial(connAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Fatalf("Did not connect: %v", err)
+		}
+
 		c := pb.NewMeerkatGuideClient(conn)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -74,6 +78,7 @@ func HandshakeClients(node *MeerkatNode) {
 			ClientList: node.Clients,
 		}
 
+		log.Printf("Attempting to handshake with clinent %s", conn.Target())
 		r, err := c.HandshakePoolProtocol(ctx, handshakeRequest)
 		if err != nil {
 			log.Fatalf("Couldn't send a handshake with client %s", conn.Target())
@@ -81,7 +86,6 @@ func HandshakeClients(node *MeerkatNode) {
 
 		if r.GetSuccess() {
 			log.Printf("Handshake with client %s successful", conn.Target())
-			node.Clients = append(node.Clients, conn.Target())
 			node.ClientsConn = append(node.ClientsConn, conn)
 		} else {
 			log.Printf("Handshake with client %s failed", conn.Target())
@@ -90,9 +94,12 @@ func HandshakeClients(node *MeerkatNode) {
 }
 
 func HandleDisconnect(node *MeerkatNode) bool {
+	log.Println("Clients to disconnect from", node.Clients)
 	for _, conn := range node.ClientsConn {
 		// send a payload informing the server that the client is disconnecting
 		// and close the connection
+
+		log.Println("Disconnecting from pool", conn.Target())
 
 		c := pb.NewMeerkatGuideClient(conn)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -111,11 +118,10 @@ func HandleDisconnect(node *MeerkatNode) bool {
 		if r.GetSuccess() {
 			log.Printf("Successfully disconnected from the pool")
 			conn.Close()
-			return true
 		}
 	}
-	log.Printf("Failed to disconnect from the pool")
-	return false
+	log.Printf("Disconnected from all nodes in the pool")
+	return true
 }
 
 func HandleEcho(input string, node *MeerkatNode) {

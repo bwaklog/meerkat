@@ -1,3 +1,9 @@
+# Milestones
+
+- [x] Basic P2P connection
+- [ ] Edge cases for a P2P connection
+- [ ] Basic Data synchronisation
+
 # Basic Networking Protocol
 
 ## Initilizing a network pool
