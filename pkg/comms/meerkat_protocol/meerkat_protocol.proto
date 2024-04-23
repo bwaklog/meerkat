@@ -21,9 +21,10 @@ message PoolJoinRequest {
     // Node enterieng sneds a request to join
     // with its address port and and empty
     // list of nodes it knows
+    // string hostname = 1;
+    // int32 port = 2;
     string address = 1;
-    int32 port = 2;
-    repeated string client_list = 3;
+    repeated string client_list = 2;
 }
 
 message PoolJoinResponse {
@@ -39,8 +40,8 @@ message PoolHandshakesRequest {
     // of nodes known to it and synced up data
     // "string" associated with it
     string address = 1;
-    int32 port = 2;
-    repeated string client_list = 3;
+    // int32 port = 2;
+    repeated string client_list = 2;
 }
 
 message PoolHandshakeResponse {
@@ -53,7 +54,7 @@ message PoolDisconnectRequest {
     // Node leaving sends a request to leave
     // with its address and port
     string address = 1;
-    int32 port = 2;
+    // int32 port = 2;
 }
 
 message PoolDisconnectResponse {

@@ -7,5 +7,5 @@ type MeerkatNode struct {
 	ClientsConn []*grpc.ClientConn
 	Data        string
 	Address     string
-	Port        int
+	// Port        int
 }

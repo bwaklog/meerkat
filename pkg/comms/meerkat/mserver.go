@@ -2,7 +2,6 @@ package comms
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net"
 
@@ -32,14 +31,14 @@ func (s *MeerkatServer) EchoText(ctx context.Context, request *pb.EchoRequest) (
 
 func (s *MeerkatServer) JoinPoolProtocol(ctx context.Context, request *pb.PoolJoinRequest) (*pb.PoolJoinResponse, error) {
 	// log.Printf("Node %s:%d attempting to connect to pool", request.GetAddress(), request.GetPort())
-	address := fmt.Sprintf("%s:%d", request.GetAddress(), request.GetPort())
+	// address := fmt.Sprintf("%s:%d", request.GetAddress(), request.GetPort())
 
 	// exchanging credentials
 	NodeClientList := s.Node.Clients
 
-	s.Node.Clients = append(s.Node.Clients, address)
+	s.Node.Clients = append(s.Node.Clients, request.GetAddress())
 
-	nodeConn := DialNewNode(address)
+	nodeConn := DialNewNode(request.GetAddress())
 
 	s.Node.ClientsConn = append(s.Node.ClientsConn, nodeConn)
 
@@ -54,13 +53,13 @@ func (s *MeerkatServer) HandshakePoolProtocol(ctx context.Context, request *pb.P
 	// this is when a node already connected to some other node in the
 	// network pool is initiating a connection between nodes part
 	// of the client list
-	address := fmt.Sprintf("%s:%d", request.GetAddress(), request.GetPort())
+	// address := fmt.Sprintf("%s:%d", request.GetAddress(), request.GetPort())
 
-	log.Printf("Handshake with node %s", address)
+	log.Printf("Handshake with node %s", request.GetAddress())
 
 	// adds node to the list of clients
-	s.Node.Clients = append(s.Node.Clients, address)
-	conn := DialNewNode(address)
+	s.Node.Clients = append(s.Node.Clients, request.GetAddress())
+	conn := DialNewNode(request.GetAddress())
 	s.Node.ClientsConn = append(s.Node.ClientsConn, conn)
 
 	return &pb.PoolHandshakeResponse{Success: true}, nil
@@ -68,12 +67,12 @@ func (s *MeerkatServer) HandshakePoolProtocol(ctx context.Context, request *pb.P
 
 // func (s *MeerkatServer) DisconnectPoolProtocol(ctx context.Context, request )
 func (s *MeerkatServer) DisconnectPoolProtocol(ctx context.Context, request *pb.PoolDisconnectRequest) (*pb.PoolDisconnectResponse, error) {
-	address := fmt.Sprintf("%s:%d", request.GetAddress(), request.GetPort())
-	log.Printf("Node %s is disconnecting ", address)
+	// address := fmt.Sprintf("%s:%d", request.GetAddress(), request.GetPort())
+	log.Printf("Node %s is disconnecting ", request.GetAddress())
 
 	// remove the node from the list of clients
 	for i, client := range s.Node.Clients {
-		if client == address {
+		if client == request.GetAddress() {
 			s.Node.Clients = append(s.Node.Clients[:i], s.Node.Clients[i+1:]...)
 			break
 		}
@@ -81,7 +80,7 @@ func (s *MeerkatServer) DisconnectPoolProtocol(ctx context.Context, request *pb.
 
 	// close the connection
 	for i, conn := range s.Node.ClientsConn {
-		if conn.Target() == address {
+		if conn.Target() == request.GetAddress() {
 			s.Node.ClientsConn = append(s.Node.ClientsConn[:i], s.Node.ClientsConn[i+1:]...)
 			conn.Close()
 			break
@@ -103,7 +102,7 @@ func DialNewNode(addr string) *grpc.ClientConn {
 }
 
 func StartListener(addr string, mkNode *MeerkatNode) {
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%s", addr))
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -115,7 +114,7 @@ func StartListener(addr string, mkNode *MeerkatNode) {
 
 	pb.RegisterMeerkatGuideServer(s, mkServer)
 
-	log.Printf("Server listening at localhost:%s", addr)
+	log.Printf("Server listening at %s", addr)
 	if err := s.Serve(lis); err != nil {
 		log.Fatal(err)
 	}

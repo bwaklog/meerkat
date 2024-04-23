@@ -4,10 +4,7 @@ import (
 	"fmt"
 	"log"
 	comms "meerkat/pkg/comms/meerkat"
-	"strconv"
 	"time"
-
-	// "meerkat/pkg/comms"
 
 	"github.com/spf13/cobra"
 )
@@ -33,13 +30,12 @@ func main() {
 
 			if paddr != "" {
 
-				node.Address = "localhost"
-				node.Port, _ = strconv.Atoi(paddr)
+				node.Address = paddr
+				// node.Port, _ = strconv.Atoi(paddr)
 
 				// this actively listens in a separate go routine
 				// for any incoming connections
 				go comms.StartListener(paddr, &node)
-
 
 				if !server {
 					// this is for connecting to a node who

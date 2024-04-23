@@ -2,7 +2,6 @@ package comms
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -28,9 +27,9 @@ func JoinNetworkPool(node *MeerkatNode, addr string) {
 	// Send over a PoolJoinRequest to server with the nodes empty client list
 	// and address and port
 
-	address := fmt.Sprintf("localhost:%s", addr)
+	// address := fmt.Sprintf("localhost:%s", addr)
 
-	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Did not connect: %v", err)
 	}
@@ -42,7 +41,7 @@ func JoinNetworkPool(node *MeerkatNode, addr string) {
 
 	poolJoinRequestTemp := &pb.PoolJoinRequest{
 		Address:    node.Address,
-		Port:       int32(node.Port),
+		// Port:       int32(node.Port),
 		ClientList: node.Clients,
 	}
 
@@ -57,7 +56,7 @@ func JoinNetworkPool(node *MeerkatNode, addr string) {
 	HandshakeClients(node)
 
 	node.ClientsConn = append(node.ClientsConn, conn)
-	node.Clients = append(node.Clients, address)
+	node.Clients = append(node.Clients, addr)
 }
 
 func HandshakeClients(node *MeerkatNode) {
@@ -74,7 +73,7 @@ func HandshakeClients(node *MeerkatNode) {
 
 		handshakeRequest := &pb.PoolHandshakesRequest{
 			Address:    node.Address,
-			Port:       int32(node.Port),
+			// Port:       int32(node.Port),
 			ClientList: node.Clients,
 		}
 
@@ -107,7 +106,7 @@ func HandleDisconnect(node *MeerkatNode) bool {
 
 		PoolDisconnectRequestTemp := &pb.PoolDisconnectRequest{
 			Address: node.Address,
-			Port:    int32(node.Port),
+			// Port:    int32(node.Port),
 		}
 
 		r, err := c.DisconnectPoolProtocol(ctx, PoolDisconnectRequestTemp)
