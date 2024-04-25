@@ -196,6 +196,7 @@ func (n *MeerkatNode)HandleBroadcastChanges(path string, data []byte) {
 	for _, conn := range n.ClientsConn {
 		c := pb.NewMeerkatGuideClient(conn)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
 
 		stream, err :=c.DataModProtocol(ctx)
 		if err != nil {
@@ -215,8 +216,17 @@ func (n *MeerkatNode)HandleBroadcastChanges(path string, data []byte) {
 			log.Fatalf("Error from reciever: %v", err)
 		}
 
-		log.Printf("Sent change in %s to %s", path, conn.Target())
-		defer cancel()
+		reply, err :=stream.CloseAndRecv()
+		if err != nil {
+			log.Fatalf("Error from reciever: %v", err)
+		}
+
+		if reply.Success {
+			log.Printf("Sent change in %s to %s", path, conn.Target())
+		} else {
+			log.Fatalf("Failed to send %s change to %s", path, conn.Target())
+		}
+
 	}
 }
 
@@ -225,7 +235,6 @@ func (n *MeerkatNode) FileTracker() {
 	for {
 		n.mutex.Lock()
 		fs.WalkDir(fileSys, ".", func(path string, d fs.DirEntry, err error) error {
-
 			if err != nil {
 				return err
 			}
@@ -235,6 +244,18 @@ func (n *MeerkatNode) FileTracker() {
 				if err != nil {
 					log.Fatal(err)
 					return err
+				}
+
+				// if file is not in the file tracker, add it
+				if _, ok := n.NodeData.FileTrack[path]; !ok {
+					n.NodeData.FileTrack[path] = fileInfo.ModTime()
+					// broadcast the file to all nodes
+					buff, err := fs.ReadFile(n.NodeData.FileSystem, path)
+					if err != nil {
+						log.Fatal(err)
+					}
+
+					n.HandleBroadcastChanges(path, buff)
 				}
 
 				if modTime, ok := n.NodeData.FileTrack[path]; ok {

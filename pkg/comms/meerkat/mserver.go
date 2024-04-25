@@ -128,6 +128,7 @@ func (s *MeerkatServer) HandshakePoolProtocol(ctx context.Context, request *pb.P
 
 // func (s *MeerkatServer) DataModProtocol(stream pb.Meerk)
 func (s *MeerkatServer) DataModProtocol(stream pb.MeerkatGuide_DataModProtocolServer) error {
+	log.Printf("Initiating data mod protocol")
 	s.Node.mutex.Lock()
 	for {
 		request, err := stream.Recv()
@@ -138,6 +139,7 @@ func (s *MeerkatServer) DataModProtocol(stream pb.MeerkatGuide_DataModProtocolSe
 				Success: true,
 			}
 			s.Node.mutex.Unlock()
+			s.Node.NodeData.LoadFileSystem(s.Node.NodeData.BaseDir)
 			return stream.SendAndClose(response)
 		}
 
@@ -147,8 +149,9 @@ func (s *MeerkatServer) DataModProtocol(stream pb.MeerkatGuide_DataModProtocolSe
 		}
 
 		switch request.Response.(type) {
+
 		case *pb.DataModRequest_DirData:
-			log.Printf("Recieving data from peer: ", request.GetFileData().Path)
+			log.Printf("Recieving data from peer: %s", request.GetFileData().Path)
 			dirData := request.GetDirData()
 			// if the directory doesnt exist, create it
 			if _, err := fs.Stat(s.Node.NodeData.FileSystem, dirData.Path); err != nil {
