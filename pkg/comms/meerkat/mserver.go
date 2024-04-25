@@ -2,8 +2,12 @@ package comms
 
 import (
 	"context"
+	"io"
+	"io/fs"
 	"log"
 	"net"
+	"os"
+	"time"
 
 	pb "meerkat/pkg/comms/meerkat_protocol"
 
@@ -29,9 +33,8 @@ func (s *MeerkatServer) EchoText(ctx context.Context, request *pb.EchoRequest) (
 	return &pb.EchoResponse{Message: "ECHO: " + request.GetMessage()}, nil
 }
 
-func (s *MeerkatServer) JoinPoolProtocol(ctx context.Context, request *pb.PoolJoinRequest) (*pb.PoolJoinResponse, error) {
-	// log.Printf("Node %s:%d attempting to connect to pool", request.GetAddress(), request.GetPort())
-	// address := fmt.Sprintf("%s:%d", request.GetAddress(), request.GetPort())
+func (s *MeerkatServer) JoinPoolProtocol(request *pb.PoolJoinRequest, stream pb.MeerkatGuide_JoinPoolProtocolServer) error {
+	log.Printf("Node %s attempting to connect to pool", request.GetAddress())
 
 	// exchanging credentials
 	NodeClientList := s.Node.Clients
@@ -42,11 +45,69 @@ func (s *MeerkatServer) JoinPoolProtocol(ctx context.Context, request *pb.PoolJo
 
 	s.Node.ClientsConn = append(s.Node.ClientsConn, nodeConn)
 
-	// for _, connAddr := range s.Node.Clients {
-	// 	fmt.Println("CLIENT: ", connAddr)
-	// }
+	response := &pb.PoolJoinResponse{
+		Response: &pb.PoolJoinResponse_ClientList{
+			ClientList: &pb.ClientList{
+				ClientList: NodeClientList,
+			},
+		},
+	}
 
-	return &pb.PoolJoinResponse{ClientList: NodeClientList, Data: s.Node.Data}, nil
+	if err := stream.Send(response); err != nil {
+		return err
+	}
+
+	fileSystem := s.Node.NodeData.FileSystem
+
+	fs.WalkDir(fileSystem, ".", func(path string, d fs.DirEntry, err error) error {
+
+		if d.IsDir() && path != "." {
+			response = &pb.PoolJoinResponse{
+				Response: &pb.PoolJoinResponse_DirData{
+					DirData: &pb.DirData{
+						Path: path,
+					},
+				},
+			}
+
+			if err = stream.Send(response); err != nil {
+				return err
+			}
+
+		}
+
+		if d.Type().IsRegular() {
+			buff, err := fs.ReadFile(s.Node.NodeData.FileSystem, path)
+			if err != nil {
+				return err
+			}
+
+			response = &pb.PoolJoinResponse{
+				Response: &pb.PoolJoinResponse_FileData{
+					FileData: &pb.FileData{
+						Path: path,
+						Data: buff,
+					},
+				},
+			}
+
+			// log.Printf("Sent %s to new client %s", path, request.GetAddress())
+
+			if err = stream.Send(response); err != nil {
+				return err
+			}
+
+		}
+
+		return nil
+	})
+
+	// send file to client with meta data such as path
+
+	// log.Printf("Sent %s from node %s",, request.GetAddress())
+
+	return nil
+
 }
 
 func (s *MeerkatServer) HandshakePoolProtocol(ctx context.Context, request *pb.PoolHandshakesRequest) (*pb.PoolHandshakeResponse, error) {
@@ -63,6 +124,61 @@ func (s *MeerkatServer) HandshakePoolProtocol(ctx context.Context, request *pb.P
 	s.Node.ClientsConn = append(s.Node.ClientsConn, conn)
 
 	return &pb.PoolHandshakeResponse{Success: true}, nil
+}
+
+// func (s *MeerkatServer) DataModProtocol(stream pb.Meerk)
+func (s *MeerkatServer) DataModProtocol(stream pb.MeerkatGuide_DataModProtocolServer) error {
+	s.Node.mutex.Lock()
+	for {
+		request, err := stream.Recv()
+
+		if err == io.EOF {
+			log.Printf("Recieved EOF")
+			response := &pb.DataModResponse{
+				Success: true,
+			}
+			s.Node.mutex.Unlock()
+			return stream.SendAndClose(response)
+		}
+
+		if err != nil {
+			log.Printf("Error in request: %v", err)
+			return err
+		}
+
+		switch request.Response.(type) {
+		case *pb.DataModRequest_DirData:
+			log.Printf("Recieving data from peer: ", request.GetFileData().Path)
+			dirData := request.GetDirData()
+			// if the directory doesnt exist, create it
+			if _, err := fs.Stat(s.Node.NodeData.FileSystem, dirData.Path); err != nil {
+				err := os.MkdirAll(dirData.Path, 0755)
+				if err != nil {
+					log.Fatalf("Failed to create directory: %v", err)
+				}
+			}
+
+		case *pb.DataModRequest_FileData:
+			fileData := request.GetFileData()
+			filePath := fileData.GetPath()
+			fileBytes := fileData.GetData()
+
+			file, err := os.Create(s.Node.NodeData.BaseDir + "/" + filePath)
+			if err != nil {
+				if err == fs.ErrNotExist {
+					log.Println("Not existing directory")
+				} else {
+					log.Fatalf("Not able to write to file system: %v", err)
+				}
+			}
+
+			file.Write(fileBytes)
+			// fs.File(s.Node.NodeData.FileSystem)
+			s.Node.NodeData.FileTrack[filePath] = time.Now()
+			file.Close()
+		}
+	}
+	// return nil
 }
 
 // func (s *MeerkatServer) DisconnectPoolProtocol(ctx context.Context, request )

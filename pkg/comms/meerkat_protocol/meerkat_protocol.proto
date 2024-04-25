@@ -10,11 +10,13 @@ service MeerkatGuide {
 
     rpc EchoText(EchoRequest) returns (EchoResponse) {}
 
-    rpc JoinPoolProtocol(PoolJoinRequest) returns (PoolJoinResponse) {}
+    rpc JoinPoolProtocol(PoolJoinRequest) returns (stream PoolJoinResponse) {}
 
     rpc HandshakePoolProtocol(PoolHandshakesRequest) returns (PoolHandshakeResponse) {}
 
     rpc DisconnectPoolProtocol(PoolDisconnectRequest) returns (PoolDisconnectResponse) {}
+
+    rpc DataModProtocol(stream DataModRequest) returns (DataModResponse) {}
 }
 
 message PoolJoinRequest {
@@ -27,12 +29,44 @@ message PoolJoinRequest {
     repeated string client_list = 2;
 }
 
+message FileData {
+    string path = 1;
+    bytes data = 2;
+}
+
+message DirData {
+    string path = 1;
+}
+
+message ClientList {
+    repeated string client_list = 1;
+}
+
 message PoolJoinResponse {
     // The recieving node responds with a list
     // of nodes known to it and synced up data
     // "string" associated with it
-    repeated string client_list = 1;
-    string data = 2;
+    // repeated string client_list = 1;
+    oneof response {
+        ClientList client_list = 1;
+        FileData file_data = 2;
+        DirData dir_data = 3;
+    }
+}
+
+message DataModRequest {
+    // A client will stream the changed files
+    // to nodes it is connected to
+    // similar to pool response
+    oneof response {
+        FileData file_data = 1;
+        DirData dir_data = 2;
+    }
+}
+
+message DataModResponse {
+    // empty response
+    bool success = 1;
 }
 
 message PoolHandshakesRequest {

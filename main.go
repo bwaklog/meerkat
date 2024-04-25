@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	comms "meerkat/pkg/comms/meerkat"
+	"meerkat/pkg/data"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -13,13 +15,17 @@ func main() {
 	var paddr string // port address
 	var saddr string // server address to connect to
 	var server bool  // used by node to initiate the connections
+	var dirwatch string // the path to the directory to watch
 
 	// var wg sync.WaitGroup
 
-	node := comms.MeerkatNode{
-		Clients: []string{},
-		Data:    "",
-	}
+
+	// if dirwatch == "" {
+	// 	log.Fatalln("Didn't provide a directory to watch")
+	// }
+
+	// load file system and fill the NodeData
+	// with the file system data
 
 	rootCmd := &cobra.Command{
 		Use:   "meerkat",
@@ -27,8 +33,29 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 
 			// var conn *grpc.ClientConn
+			if dirwatch == "" {
+				log.Fatalln("Didn't provide a directory to watch")
+			}
+
+			node := comms.MeerkatNode{
+				Clients: []string{},
+				NodeData: data.NodeData{
+					FileSystem: os.DirFS(dirwatch),
+					BaseDir: dirwatch,
+					FileTrack:  make(map[string]time.Time, 5),
+				},
+			}
+
+			node.NodeData.LoadFileSystem(dirwatch)
+			log.Println("Loaded file system: ", dirwatch)
+
+			// print all files available
+			// for k, v := range node.NodeData.FileTrack {
+			// 	log.Printf("File: %s, ModTime: %s", k, v)
+			// }
 
 			if paddr != "" {
+
 
 				node.Address = paddr
 				// node.Port, _ = strconv.Atoi(paddr)
@@ -55,19 +82,22 @@ func main() {
 			}
 
 			// run the evaluation throuhg in the background
-			go func() {
-				for {
-					log.Printf("Evaluating %d clients", len(node.Clients))
-					for _, conn := range node.Clients {
-						log.Println("🖥️ CLIENT: ", conn)
-					}
-					time.Sleep(5 * time.Second)
-				}
-			}()
+			// go func() {
+			// 	for {
+			// 		log.Printf("Evaluating %d clients", len(node.Clients))
+			// 		for _, conn := range node.Clients {
+			// 			log.Println("🖥️ CLIENT: ", conn)
+			// 		}
+			// 		time.Sleep(5 * time.Second)
+			// 	}
+			// }()
+
+			go node.FileTracker()
+
 
 			for {
 				var input string
-				fmt.Print("MSG: ")
+				// fmt.Print("MSG: ")
 				fmt.Scanln(&input)
 				if input == "exit" {
 					if comms.HandleDisconnect(&node) {
@@ -85,6 +115,7 @@ func main() {
 	rootCmd.Flags().StringVarP(&paddr, "port", "p", "", "port address")
 	rootCmd.Flags().StringVarP(&saddr, "saddr", "c", "", "server address to connect to")
 	rootCmd.Flags().BoolVarP(&server, "server", "s", false, "Used to initiate the connection")
+	rootCmd.Flags().StringVarP(&dirwatch, "dir", "d", "", "The directory to watch/share among clients")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)

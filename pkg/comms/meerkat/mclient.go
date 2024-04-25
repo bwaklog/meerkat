@@ -2,7 +2,11 @@ package comms
 
 import (
 	"context"
+	"io"
+	"io/fs"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	pb "meerkat/pkg/comms/meerkat_protocol"
@@ -40,18 +44,78 @@ func JoinNetworkPool(node *MeerkatNode, addr string) {
 	defer cancel()
 
 	poolJoinRequestTemp := &pb.PoolJoinRequest{
-		Address:    node.Address,
+		Address: node.Address,
 		// Port:       int32(node.Port),
 		ClientList: node.Clients,
 	}
 
-	r, err := c.JoinPoolProtocol(ctx, poolJoinRequestTemp)
+	// r, err := c.JoinPoolProtocol(ctx, poolJoinRequestTemp)
+	// if err != nil {
+	// 	log.Fatalf("Not able to send a join pool request to server")
+	// }
+
+	// node.Clients = r.GetClientList()
+
+	stream, err := c.JoinPoolProtocol(ctx, poolJoinRequestTemp)
 	if err != nil {
 		log.Fatalf("Not able to send a join pool request to server")
 	}
 
-	node.Clients = r.GetClientList()
-	node.Data = r.GetData()
+	// node.mutex.Lock()
+
+	for {
+		// continuously recieve data from server
+		response, err := stream.Recv()
+		if err != nil {
+			if err != io.EOF {
+				log.Println(err)
+			}
+			break
+		}
+
+		if err == io.EOF {
+			break
+		}
+
+		switch response.GetResponse().(type) {
+		case *pb.PoolJoinResponse_ClientList:
+			node.Clients = response.GetClientList().ClientList
+
+		case *pb.PoolJoinResponse_DirData:
+			err := os.MkdirAll(node.NodeData.BaseDir + "/" + response.GetDirData().Path, 0755)
+			if err != nil {
+				log.Fatalf("Unable to create directory: %v", err)
+			}
+			log.Println("Created directories for: ", response.GetDirData().Path)
+
+		case *pb.PoolJoinResponse_FileData:
+			// TODO
+			fileData := response.GetFileData()
+			filePath := fileData.GetPath()
+			fileBytes := fileData.GetData()
+
+			// write to file system
+
+			file, err := os.Create(node.NodeData.BaseDir + "/" + filePath)
+			if err != nil {
+				if err == fs.ErrNotExist {
+					log.Println("Non existing directory")
+				} else {
+					log.Fatalf("Not able to write to file system: %v", err)
+				}
+			}
+
+			file.Write(fileBytes)
+			node.NodeData.FileTrack[filePath] = time.Now()
+			file.Close()
+
+
+			// log.Printf("Received %s from node %s", filePath, conn.Target())
+			node.NodeData.LoadFileSystem(node.NodeData.BaseDir)
+		}
+
+	}
+	// node.mutex.Unlock()
 
 	HandshakeClients(node)
 
@@ -72,7 +136,7 @@ func HandshakeClients(node *MeerkatNode) {
 		defer cancel()
 
 		handshakeRequest := &pb.PoolHandshakesRequest{
-			Address:    node.Address,
+			Address: node.Address,
 			// Port:       int32(node.Port),
 			ClientList: node.Clients,
 		}
@@ -111,7 +175,11 @@ func HandleDisconnect(node *MeerkatNode) bool {
 
 		r, err := c.DisconnectPoolProtocol(ctx, PoolDisconnectRequestTemp)
 		if err != nil {
-			log.Fatalf("Could not send disconnect request to server: %v", err)
+			if err == grpc.ErrServerStopped {
+				log.Println("Server has stopped")
+			} else {
+				log.Fatalf("Could not send disconnect request to server: %v", err)
+			}
 		}
 
 		if r.GetSuccess() {
@@ -122,6 +190,73 @@ func HandleDisconnect(node *MeerkatNode) bool {
 	log.Printf("Disconnected from all nodes in the pool")
 	return true
 }
+
+func (n *MeerkatNode)HandleBroadcastChanges(path string, data []byte) {
+	log.Printf("Sending data to : %v", n.Clients)
+	for _, conn := range n.ClientsConn {
+		c := pb.NewMeerkatGuideClient(conn)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+		stream, err :=c.DataModProtocol(ctx)
+		if err != nil {
+			log.Fatalf("Not able to send a join pool request to server")
+		}
+
+		response := &pb.DataModRequest{
+			Response: &pb.DataModRequest_FileData{
+				FileData: &pb.FileData{
+					Path: path,
+					Data: data,
+				},
+			},
+		}
+
+		if err := stream.Send(response); err != nil {
+			log.Fatalf("Error from reciever: %v", err)
+		}
+
+		log.Printf("Sent change in %s to %s", path, conn.Target())
+		defer cancel()
+	}
+}
+
+func (n *MeerkatNode) FileTracker() {
+	fileSys := n.NodeData.FileSystem
+	for {
+		n.mutex.Lock()
+		fs.WalkDir(fileSys, ".", func(path string, d fs.DirEntry, err error) error {
+
+			if err != nil {
+				return err
+			}
+
+			if d.Type().IsRegular() && !strings.Contains(path, ".DS_Store"){
+				fileInfo, err := d.Info()
+				if err != nil {
+					log.Fatal(err)
+					return err
+				}
+
+				if modTime, ok := n.NodeData.FileTrack[path]; ok {
+					if modTime != fileInfo.ModTime() {
+
+						buff, err := fs.ReadFile(n.NodeData.FileSystem, path)
+						if err != nil {
+							return err
+						}
+						n.HandleBroadcastChanges(path, buff)
+						n.NodeData.FileTrack[path] = fileInfo.ModTime()
+
+					}
+				}
+			}
+
+			return nil
+		})
+		n.mutex.Unlock()
+	}
+}
+
 
 func HandleEcho(input string, node *MeerkatNode) {
 
