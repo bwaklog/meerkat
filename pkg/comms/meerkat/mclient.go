@@ -49,13 +49,6 @@ func JoinNetworkPool(node *MeerkatNode, addr string) {
 		ClientList: node.Clients,
 	}
 
-	// r, err := c.JoinPoolProtocol(ctx, poolJoinRequestTemp)
-	// if err != nil {
-	// 	log.Fatalf("Not able to send a join pool request to server")
-	// }
-
-	// node.Clients = r.GetClientList()
-
 	stream, err := c.JoinPoolProtocol(ctx, poolJoinRequestTemp)
 	if err != nil {
 		log.Fatalf("Not able to send a join pool request to server")
@@ -82,7 +75,7 @@ func JoinNetworkPool(node *MeerkatNode, addr string) {
 			node.Clients = response.GetClientList().ClientList
 
 		case *pb.PoolJoinResponse_DirData:
-			err := os.MkdirAll(node.NodeData.BaseDir + "/" + response.GetDirData().Path, 0755)
+			err := os.MkdirAll(node.NodeData.BaseDir+"/"+response.GetDirData().Path, 0755)
 			if err != nil {
 				log.Fatalf("Unable to create directory: %v", err)
 			}
@@ -106,11 +99,13 @@ func JoinNetworkPool(node *MeerkatNode, addr string) {
 			}
 
 			file.Write(fileBytes)
-			node.NodeData.FileTrack[filePath] = time.Now()
+
+			node.NodeData.FileTrackMap.Lock.Lock()
+			node.NodeData.FileTrackMap.FileTrack[filePath] = time.Now()
+			node.NodeData.FileTrackMap.Lock.Unlock()
+
 			file.Close()
 
-
-			// log.Printf("Received %s from node %s", filePath, conn.Target())
 			node.NodeData.LoadFileSystem(node.NodeData.BaseDir)
 		}
 
@@ -191,16 +186,18 @@ func HandleDisconnect(node *MeerkatNode) bool {
 	return true
 }
 
-func (n *MeerkatNode)HandleBroadcastChanges(path string, data []byte) {
+func (n *MeerkatNode) HandleBroadcastChanges(path string, data []byte) {
 	log.Printf("Sending data to : %v", n.Clients)
+
 	for _, conn := range n.ClientsConn {
 		c := pb.NewMeerkatGuideClient(conn)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
-		stream, err :=c.DataModProtocol(ctx)
+		stream, err := c.DataModProtocol(ctx)
 		if err != nil {
-			log.Fatalf("Not able to send a join pool request to server")
+			// TODO: Change error message
+			log.Fatalf("Not able to send stream of change to node %s", conn.Target())
 		}
 
 		response := &pb.DataModRequest{
@@ -212,11 +209,12 @@ func (n *MeerkatNode)HandleBroadcastChanges(path string, data []byte) {
 			},
 		}
 
+		log.Printf("File %s cahge to %s", path, conn.Target())
 		if err := stream.Send(response); err != nil {
 			log.Fatalf("Error from reciever: %v", err)
 		}
 
-		reply, err :=stream.CloseAndRecv()
+		reply, err := stream.CloseAndRecv()
 		if err != nil {
 			log.Fatalf("Error from reciever: %v", err)
 		}
@@ -239,16 +237,18 @@ func (n *MeerkatNode) FileTracker() {
 				return err
 			}
 
-			if d.Type().IsRegular() && !strings.Contains(path, ".DS_Store"){
+			if d.Type().IsRegular() && !strings.Contains(path, ".DS_Store") {
 				fileInfo, err := d.Info()
 				if err != nil {
 					log.Fatal(err)
-					return err
+					// return err
 				}
 
 				// if file is not in the file tracker, add it
-				if _, ok := n.NodeData.FileTrack[path]; !ok {
-					n.NodeData.FileTrack[path] = fileInfo.ModTime()
+				n.NodeData.FileTrackMap.Lock.Lock()
+
+				if _, ok := n.NodeData.FileTrackMap.FileTrack[path]; !ok {
+					n.NodeData.FileTrackMap.FileTrack[path] = fileInfo.ModTime()
 					// broadcast the file to all nodes
 					buff, err := fs.ReadFile(n.NodeData.FileSystem, path)
 					if err != nil {
@@ -258,18 +258,26 @@ func (n *MeerkatNode) FileTracker() {
 					n.HandleBroadcastChanges(path, buff)
 				}
 
-				if modTime, ok := n.NodeData.FileTrack[path]; ok {
+				if modTime, ok := n.NodeData.FileTrackMap.FileTrack[path]; ok {
+					// log.Println("File exists in the map")
 					if modTime != fileInfo.ModTime() {
+						log.Printf("Mod time: %v", fileInfo.ModTime())
 
 						buff, err := fs.ReadFile(n.NodeData.FileSystem, path)
 						if err != nil {
 							return err
 						}
+
 						n.HandleBroadcastChanges(path, buff)
-						n.NodeData.FileTrack[path] = fileInfo.ModTime()
+
+						n.NodeData.FileTrackMap.FileTrack[path] = fileInfo.ModTime()
+
+						log.Printf("Updated mod time for %s", path)
 
 					}
 				}
+				n.NodeData.FileTrackMap.Lock.Unlock()
+
 			}
 
 			return nil
@@ -277,7 +285,6 @@ func (n *MeerkatNode) FileTracker() {
 		n.mutex.Unlock()
 	}
 }
-
 
 func HandleEcho(input string, node *MeerkatNode) {
 

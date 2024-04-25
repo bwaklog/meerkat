@@ -7,7 +7,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"time"
 
 	pb "meerkat/pkg/comms/meerkat_protocol"
 
@@ -138,8 +137,10 @@ func (s *MeerkatServer) DataModProtocol(stream pb.MeerkatGuide_DataModProtocolSe
 			response := &pb.DataModResponse{
 				Success: true,
 			}
+
 			s.Node.mutex.Unlock()
 			s.Node.NodeData.LoadFileSystem(s.Node.NodeData.BaseDir)
+
 			return stream.SendAndClose(response)
 		}
 
@@ -176,12 +177,23 @@ func (s *MeerkatServer) DataModProtocol(stream pb.MeerkatGuide_DataModProtocolSe
 			}
 
 			file.Write(fileBytes)
-			// fs.File(s.Node.NodeData.FileSystem)
-			s.Node.NodeData.FileTrack[filePath] = time.Now()
+
+			s.Node.NodeData.FileTrackMap.Lock.Lock()
+
+			fileInfo, err := os.Stat(s.Node.NodeData.BaseDir + "/" + filePath)
+			if err != nil {
+				log.Fatalf("Error in getting file info: %v", err)
+			}
+
+			s.Node.NodeData.FileTrackMap.FileTrack[filePath] = fileInfo.ModTime()
+
+			s.Node.NodeData.FileTrackMap.Lock.Unlock()
+
+			log.Println("Updated file written to disk")
+
 			file.Close()
 		}
 	}
-	// return nil
 }
 
 // func (s *MeerkatServer) DisconnectPoolProtocol(ctx context.Context, request )

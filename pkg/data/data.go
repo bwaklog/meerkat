@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -25,7 +26,12 @@ type NodeData struct {
 	BaseDir    string
 
 	// map of file path to mod time
+	FileTrackMap FileTrackMap
+}
+
+type FileTrackMap struct {
 	FileTrack map[string]time.Time
+	Lock sync.Mutex
 }
 
 func (n *NodeData) LoadFileSystem(dirwatch string) {
@@ -37,7 +43,6 @@ func (n *NodeData) LoadFileSystem(dirwatch string) {
 		}
 
 		if d.IsDir() {
-			// add dir to file track
 			// log.Println("Encountered DIR")
 		} else if d.Type().IsRegular() {
 			fileInfo, err := d.Info()
@@ -46,12 +51,9 @@ func (n *NodeData) LoadFileSystem(dirwatch string) {
 				return err
 			}
 			// log.Printf("Loaded tracking for %s", path)
-			n.FileTrack[path] = fileInfo.ModTime()
-			// buff, err := fs.ReadFile(fileSystem, path)
-			// if err != nil {
-			// 	log.Fatalf("Failed to read file")
-			// }
-			// log.Println(string(buff))
+			n.FileTrackMap.Lock.Lock()
+			n.FileTrackMap.FileTrack[path] = fileInfo.ModTime()
+			n.FileTrackMap.Lock.Unlock()
 		}
 
 		return nil

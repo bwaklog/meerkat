@@ -17,6 +17,8 @@ func main() {
 	var server bool  // used by node to initiate the connections
 	var dirwatch string // the path to the directory to watch
 
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+
 	// var wg sync.WaitGroup
 
 
@@ -42,7 +44,9 @@ func main() {
 				NodeData: data.NodeData{
 					FileSystem: os.DirFS(dirwatch),
 					BaseDir: dirwatch,
-					FileTrack:  make(map[string]time.Time, 5),
+					FileTrackMap: data.FileTrackMap{
+						FileTrack: make(map[string]time.Time),
+					},
 				},
 			}
 
@@ -93,7 +97,6 @@ func main() {
 			// }()
 
 			go node.FileTracker()
-
 
 			for {
 				var input string

@@ -2,7 +2,10 @@
 
 - [x] Basic P2P connection
 - [ ] Edge cases for a P2P connection
-- [ ] Basic Data synchronisation
+- [x] Basic Data synchronisation
+
+![Data synchronisaton between containers](https://i.imgur.com/LTaopsX.png)
+*basic data synchronisation between clients in a network (above: two docker containers)*
 
 # Basic Networking Protocol
 
