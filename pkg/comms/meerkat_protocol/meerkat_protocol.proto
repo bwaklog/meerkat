@@ -54,6 +54,17 @@ message PoolJoinResponse {
     }
 }
 
+message HeartBeatRequest {
+    // Somewhat like rafts hartbeat,
+    // just to inform clients about its
+    // presence
+    bool ping = 1;
+}
+
+message HeartBeatResponse {
+    bool ping = 1;
+}
+
 message DataModRequest {
     // A client will stream the changed files
     // to nodes it is connected to

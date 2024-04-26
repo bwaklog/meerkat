@@ -6,21 +6,22 @@ import (
 	comms "meerkat/pkg/comms/meerkat"
 	"meerkat/pkg/data"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
 )
 
 func main() {
-	var paddr string // port address
-	var saddr string // server address to connect to
-	var server bool  // used by node to initiate the connections
+	var paddr string    // port address
+	var saddr string    // server address to connect to
+	var server bool     // used by node to initiate the connections
 	var dirwatch string // the path to the directory to watch
 
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
 	// var wg sync.WaitGroup
-
 
 	// if dirwatch == "" {
 	// 	log.Fatalln("Didn't provide a directory to watch")
@@ -43,7 +44,7 @@ func main() {
 				Clients: []string{},
 				NodeData: data.NodeData{
 					FileSystem: os.DirFS(dirwatch),
-					BaseDir: dirwatch,
+					BaseDir:    dirwatch,
 					FileTrackMap: data.FileTrackMap{
 						FileTrack: make(map[string]time.Time),
 					},
@@ -59,7 +60,6 @@ func main() {
 			// }
 
 			if paddr != "" {
-
 
 				node.Address = paddr
 				// node.Port, _ = strconv.Atoi(paddr)
@@ -96,7 +96,19 @@ func main() {
 			// 	}
 			// }()
 
-			go node.FileTracker()
+			// go node.FileTracker()
+
+			// graceful exit
+			go func() {
+				sigChan := make(chan os.Signal, 1)
+				signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+				<-sigChan
+
+				log.Println("Shutting down...")
+				// exit
+				comms.HandleDisconnect(&node)
+				os.Exit(0)
+			}()
 
 			for {
 				var input string
