@@ -2,6 +2,7 @@ package comms
 
 import (
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 	"log"
@@ -106,7 +107,8 @@ func JoinNetworkPool(node *MeerkatNode, addr string) {
 
 			file.Close()
 
-			node.NodeData.LoadFileSystem(node.NodeData.BaseDir)
+			// node.NodeData.LoadFileSystem(node.NodeData.BaseDir)
+			node.NodeData.DirSnapshot()
 		}
 
 	}
@@ -203,8 +205,9 @@ func (n *MeerkatNode) HandleBroadcastChanges(path string, data []byte) {
 		response := &pb.DataModRequest{
 			Response: &pb.DataModRequest_FileData{
 				FileData: &pb.FileData{
-					Path: path,
-					Data: data,
+					Action: pb.Action_ADD,
+					Path:   path,
+					Data:   data,
 				},
 			},
 		}
@@ -225,6 +228,128 @@ func (n *MeerkatNode) HandleBroadcastChanges(path string, data []byte) {
 			log.Fatalf("Failed to send %s change to %s", path, conn.Target())
 		}
 
+	}
+}
+
+func (n *MeerkatNode) HandleDeletionBroadcast(path string) {
+	log.Printf("Sending deletion request of %s to : %v", path, n.Clients)
+
+	for _, conn := range n.ClientsConn {
+		c := pb.NewMeerkatGuideClient(conn)
+		ctx, cancle := context.WithTimeout(context.Background(), time.Second)
+		defer cancle()
+
+		stream, err := c.DataModProtocol(ctx)
+		if err != nil {
+			log.Fatalf("Not able to stream deletion change to node %s", conn.Target())
+		}
+
+		request := &pb.DataModRequest{
+			Response: &pb.DataModRequest_FileData{
+				FileData: &pb.FileData{
+					Action: pb.Action_DELETE,
+					Path:   path,
+				},
+			},
+		}
+
+		log.Printf("File %s change to %s", path, conn.Target())
+		if err := stream.Send(request); err != nil {
+			log.Fatalf("Error from reciever: %v", err)
+		}
+
+		reply, err := stream.CloseAndRecv()
+
+		if err != nil {
+			log.Fatalf("Error from reciever: %v", err)
+		}
+
+		if reply.Success {
+			log.Printf("Sent deletion of %s to %s", path, conn.Target())
+		} else {
+			log.Fatalf("Failed to send deletion of %s to %s", path, conn.Target())
+		}
+
+	}
+}
+
+func (n *MeerkatNode) DirChangeWatcher() {
+	fileSys := n.NodeData.FileSystem
+
+	for {
+		n.mutex.Lock()
+		fileCount := 0
+		fs.WalkDir(fileSys, ".", func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+
+			// check if file is in the snapshot
+			if path != "." && !strings.Contains(path, ".DS_Store") {
+				fileCount++
+				n.NodeData.DiskSnapshot.Lock.Lock()
+				if _, ok := n.NodeData.DiskSnapshot.File[path]; !ok {
+					// file is not in the snapshot
+					// this means the file has been added
+					// to the disk
+					diskDataInfo, err := d.Info()
+					if err != nil {
+						return err
+					}
+					n.NodeData.DiskSnapshot.File[path] = diskDataInfo
+					buff, err := fs.ReadFile(n.NodeData.FileSystem, path)
+					if err != nil {
+						return err
+					}
+					n.HandleBroadcastChanges(path, buff)
+				}
+
+				// check if the mod time of the file has changed
+				entryInfo, err := d.Info()
+				if err != nil {
+					return err
+				}
+				modTime := entryInfo.ModTime()
+
+				// snapshotDataInfo, err := n.NodeData.DiskSnapshot.File[path]
+				snapshotDataInfo := n.NodeData.DiskSnapshot.File[path]
+				snapshotModTime := snapshotDataInfo.ModTime()
+
+				if modTime != snapshotModTime {
+					// file has been modified
+					// send the new data to the pool
+					var buff []byte
+					buff, err := fs.ReadFile(n.NodeData.FileSystem, path)
+					if err != nil {
+						return err
+					}
+
+					n.HandleBroadcastChanges(path, buff)
+
+					// create a new disk snapshot
+					n.NodeData.DiskSnapshot.File[path] = entryInfo
+
+				}
+
+				n.NodeData.DiskSnapshot.Lock.Unlock()
+			}
+
+			return nil
+		})
+
+		if fileCount != len(n.NodeData.DiskSnapshot.File) {
+			n.NodeData.DiskSnapshot.Lock.Lock()
+			// find which file is not present
+			for k, _ := range n.NodeData.DiskSnapshot.File {
+				if _, err := os.Stat(n.NodeData.BaseDir + "/" + k); errors.Is(err, os.ErrNotExist) {
+					n.HandleDeletionBroadcast(k)
+					delete(n.NodeData.DiskSnapshot.File, k)
+					break
+				}
+			}
+			n.NodeData.DiskSnapshot.Lock.Unlock()
+		}
+		n.mutex.Unlock()
 	}
 }
 

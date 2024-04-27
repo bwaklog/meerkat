@@ -90,8 +90,6 @@ func (s *MeerkatServer) JoinPoolProtocol(request *pb.PoolJoinRequest, stream pb.
 				},
 			}
 
-			// log.Printf("Sent %s to new client %s", path, request.GetAddress())
-
 			if err = stream.Send(response); err != nil {
 				return err
 			}
@@ -128,7 +126,9 @@ func (s *MeerkatServer) HandshakePoolProtocol(ctx context.Context, request *pb.P
 // func (s *MeerkatServer) DataModProtocol(stream pb.Meerk)
 func (s *MeerkatServer) DataModProtocol(stream pb.MeerkatGuide_DataModProtocolServer) error {
 	log.Printf("Initiating data mod protocol")
+
 	s.Node.mutex.Lock()
+
 	for {
 		request, err := stream.Recv()
 
@@ -138,9 +138,11 @@ func (s *MeerkatServer) DataModProtocol(stream pb.MeerkatGuide_DataModProtocolSe
 				Success: true,
 			}
 
-			s.Node.mutex.Unlock()
-			s.Node.NodeData.LoadFileSystem(s.Node.NodeData.BaseDir)
+			// s.Node.NodeData.LoadFileSystem(s.Node.NodeData.BaseDir)
+			s.Node.NodeData.DirSnapshot()
 
+			log.Println("Unlocking the node mutex")
+			s.Node.mutex.Unlock()
 			return stream.SendAndClose(response)
 		}
 
@@ -163,35 +165,65 @@ func (s *MeerkatServer) DataModProtocol(stream pb.MeerkatGuide_DataModProtocolSe
 			}
 
 		case *pb.DataModRequest_FileData:
-			fileData := request.GetFileData()
-			filePath := fileData.GetPath()
-			fileBytes := fileData.GetData()
 
-			file, err := os.Create(s.Node.NodeData.BaseDir + "/" + filePath)
-			if err != nil {
-				if err == fs.ErrNotExist {
-					log.Println("Not existing directory")
-				} else {
-					log.Fatalf("Not able to write to file system: %v", err)
+			log.Printf("Mod request : %v", request.GetFileData().Action)
+
+			switch request.GetFileData().Action {
+			case pb.Action_ADD:
+				log.Println("Add/Update file operation initiated")
+				fileData := request.GetFileData()
+				filePath := fileData.GetPath()
+				fileBytes := fileData.GetData()
+
+				file, err := os.Create(s.Node.NodeData.BaseDir + "/" + filePath)
+				if err != nil {
+					if err == fs.ErrNotExist {
+						log.Println("Not existing directory")
+					} else {
+						log.Fatalf("Not able to write to file system: %v", err)
+					}
 				}
+
+				file.Write(fileBytes)
+
+				s.Node.NodeData.DiskSnapshot.Lock.Lock()
+
+				// create a fs.DirEntry of the received file
+				// fill in the old stats from the current file
+
+				fileDirInfo, err := fs.Stat(s.Node.NodeData.FileSystem, filePath)
+				if err != nil {
+					log.Fatalf("Error in getting file info: %v", err)
+				}
+
+				// update the file in the file system
+				s.Node.NodeData.DiskSnapshot.File[filePath] = fileDirInfo
+
+				// s.Node.NodeData.FileTrackMap.Lock.Unlock()
+				s.Node.NodeData.DiskSnapshot.Lock.Unlock()
+
+				log.Println("Updated file written to disk")
+
+				file.Close()
+
+			case pb.Action_DELETE:
+				fileData := request.GetFileData()
+				filePath := fileData.GetPath()
+
+				os.Remove(s.Node.NodeData.BaseDir + "/" + filePath)
+				if err != nil {
+					log.Fatal(err)
+					log.Fatalf("Unable to delete file %s", filePath)
+				}
+				log.Printf("Deleted file %s", filePath)
+
+				s.Node.NodeData.DiskSnapshot.Lock.Lock()
+				delete(s.Node.NodeData.DiskSnapshot.File, filePath)
+				s.Node.NodeData.DiskSnapshot.Lock.Unlock()
+
+				log.Printf("Deleted %s from disk snapshot", filePath)
 			}
 
-			file.Write(fileBytes)
-
-			s.Node.NodeData.FileTrackMap.Lock.Lock()
-
-			fileInfo, err := os.Stat(s.Node.NodeData.BaseDir + "/" + filePath)
-			if err != nil {
-				log.Fatalf("Error in getting file info: %v", err)
-			}
-
-			s.Node.NodeData.FileTrackMap.FileTrack[filePath] = fileInfo.ModTime()
-
-			s.Node.NodeData.FileTrackMap.Lock.Unlock()
-
-			log.Println("Updated file written to disk")
-
-			file.Close()
 		}
 	}
 }
@@ -202,6 +234,7 @@ func (s *MeerkatServer) DisconnectPoolProtocol(ctx context.Context, request *pb.
 	log.Printf("Node %s is disconnecting ", request.GetAddress())
 
 	// remove the node from the list of clients
+	s.Node.mutex.Lock()
 	for i, client := range s.Node.Clients {
 		if client == request.GetAddress() {
 			s.Node.Clients = append(s.Node.Clients[:i], s.Node.Clients[i+1:]...)
@@ -217,6 +250,7 @@ func (s *MeerkatServer) DisconnectPoolProtocol(ctx context.Context, request *pb.
 			break
 		}
 	}
+	s.Node.mutex.Unlock()
 
 	return &pb.PoolDisconnectResponse{Success: true}, nil
 }

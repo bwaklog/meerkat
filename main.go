@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"log"
 	comms "meerkat/pkg/comms/meerkat"
 	"meerkat/pkg/data"
@@ -45,13 +46,18 @@ func main() {
 				NodeData: data.NodeData{
 					FileSystem: os.DirFS(dirwatch),
 					BaseDir:    dirwatch,
+					DiskSnapshot: data.DiskSnapshot{
+						File: make(map[string]fs.FileInfo),
+					},
 					FileTrackMap: data.FileTrackMap{
 						FileTrack: make(map[string]time.Time),
 					},
 				},
 			}
 
-			node.NodeData.LoadFileSystem(dirwatch)
+			// node.NodeData.LoadFileSystem(dirwatch)
+			node.NodeData.DirSnapshot()
+
 			log.Println("Loaded file system: ", dirwatch)
 
 			// print all files available
@@ -96,7 +102,7 @@ func main() {
 			// 	}
 			// }()
 
-			// go node.FileTracker()
+			go node.DirChangeWatcher()
 
 			// graceful exit
 			go func() {

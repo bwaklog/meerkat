@@ -27,11 +27,18 @@ type NodeData struct {
 
 	// map of file path to mod time
 	FileTrackMap FileTrackMap
+	DiskSnapshot DiskSnapshot
 }
 
 type FileTrackMap struct {
 	FileTrack map[string]time.Time
-	Lock sync.Mutex
+	Lock      sync.Mutex
+}
+
+type DiskSnapshot struct {
+	FileCount int
+	File      map[string]fs.FileInfo
+	Lock      sync.Mutex
 }
 
 func (n *NodeData) LoadFileSystem(dirwatch string) {
@@ -54,6 +61,29 @@ func (n *NodeData) LoadFileSystem(dirwatch string) {
 			n.FileTrackMap.Lock.Lock()
 			n.FileTrackMap.FileTrack[path] = fileInfo.ModTime()
 			n.FileTrackMap.Lock.Unlock()
+		}
+
+		return nil
+	})
+}
+
+func (n *NodeData) DirSnapshot() {
+	dirwatch := n.BaseDir
+	fileSys := os.DirFS(dirwatch)
+
+	fs.WalkDir(fileSys, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if path != "." {
+			n.DiskSnapshot.Lock.Lock()
+			n.DiskSnapshot.File[path], err = d.Info()
+			if err != nil {
+				return err
+			}
+			n.DiskSnapshot.FileCount++
+			n.DiskSnapshot.Lock.Unlock()
 		}
 
 		return nil
